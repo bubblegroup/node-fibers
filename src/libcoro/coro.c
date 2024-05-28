@@ -245,7 +245,7 @@ trampoline (int sig)
          "\tpopl %ebp\n"
          "\tpopl %ecx\n"
          "\tjmpl *%ecx\n"
-      #elif defined(__arm64) && defined(__APPLE__)
+      #elif defined(__arm64) || __aarch64__
         #define NUM_SAVED 20
         "\tsub	sp, sp, #176\n"
 	    "\tstr	x30, [sp, #160]\n"
@@ -423,7 +423,7 @@ coro_create (coro_context *ctx, coro_func coro, void *arg, void *sptr, size_t ss
 
 # elif CORO_ASM
 
-  #if __i386__ || __x86_64__ || (defined(__arm64) && defined(__APPLE__))
+  #if __i386__ || __x86_64__ || (defined(__arm64) || __aarch64__)
     ctx->sp = (void **)(ssize + (char *)sptr);
     *--ctx->sp = (void *)abort; /* needed for alignment only */
     *--ctx->sp = (void *)coro_init;
@@ -441,7 +441,7 @@ coro_create (coro_context *ctx, coro_func coro, void *arg, void *sptr, size_t ss
   ctx->sp -= NUM_SAVED;
   memset (ctx->sp, 0, sizeof (*ctx->sp) * NUM_SAVED);
 
-  #if __i386__ || __x86_64__ || (defined(__arm64) && defined(__APPLE__))
+  #if __i386__ || __x86_64__ || (defined(__arm64) || __aarch64__)
     /* done already */
   #elif CORO_ARM
     ctx->sp[0] = coro; /* r4 */

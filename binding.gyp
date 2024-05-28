@@ -47,7 +47,7 @@
 						'conditions': [
 							['<(USE_MUSL) == 1',
 								{'defines': ['CORO_ASM', '__MUSL__']},
-								{'defines': ['CORO_UCONTEXT']}
+								{'defines': ['CORO_ASM']}
 							],
 						],
 					},
