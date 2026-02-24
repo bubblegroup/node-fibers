@@ -81,10 +81,14 @@ function setupAsyncHacks(Fiber) {
 			return stack;
 		}
 
+		var kStackLength = aw.constants.kStackLength;
+
 		function restoreStack(stack) {
 			for (var ii = 0; ii < stack.length; ++ii) {
 				pushAsyncContext(stack[ii].asyncId, stack[ii].triggerId);
-				aw.execution_async_resources[ii] = stack[ii].asyncResource;
+				// pushAsyncContext increments kStackLength, so the resource
+				// belongs at index (kStackLength - 1)
+				aw.execution_async_resources[aw.async_hook_fields[kStackLength] - 1] = stack[ii].asyncResource;
 			}
 		}
 
