@@ -84,7 +84,7 @@ function setupAsyncHacks(Fiber) {
 		function restoreStack(stack) {
 			for (var ii = 0; ii < stack.length; ++ii) {
 				pushAsyncContext(stack[ii].asyncId, stack[ii].triggerId);
-				aw.execution_async_resources.push(stack[ii].asyncResource);
+				aw.execution_async_resources[ii] = stack[ii].asyncResource;
 			}
 		}
 
