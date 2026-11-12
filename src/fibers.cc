@@ -723,8 +723,10 @@ class Fiber {
 			// This will jump into either `RunFiber()` or `Yield()`, depending on if the fiber was
 			// already running.
 			{
-				Unlocker unlocker(isolate);
+				// Exit before unlocking so that on the way back v8 restores this fiber's thread state
+				// before `Enter()` touches it.
 				uni::ReverseIsolateScope isolate_scope(isolate);
+				Unlocker unlocker(isolate);
 				this_fiber->run();
 			}
 
@@ -837,8 +839,8 @@ class Fiber {
 			// ok to garbage collect. If no one ever has a handle to resume the function it's harmful to
 			// keep the handle around.
 			{
-				Unlocker unlocker(that.isolate);
 				uni::ReverseIsolateScope isolate_scope(that.isolate);
+				Unlocker unlocker(that.isolate);
 				that.yielding = true;
 				that.entry_fiber->run();
 				that.yielding = false;
