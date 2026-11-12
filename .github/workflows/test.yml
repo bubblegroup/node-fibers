@@ -35,4 +35,3 @@ jobs:
         env:
           # Outside node_modules, process.binding prints a deprecation warning the tests read as a failure
           NODE_OPTIONS: --no-deprecation
-          FIBERS_DEBUG_TLS: ''
