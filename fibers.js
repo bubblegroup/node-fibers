@@ -29,7 +29,13 @@ if (process.fiberLib) {
 function setupAsyncHacks(Fiber) {
 	// Older (or newer?) versions of node may not support this API
 	try {
-		var aw = process.binding('async_wrap');
+		var aw;
+		try {
+			aw = process.binding('async_wrap');
+		} catch (err) {
+			// Node 24+ no longer exposes this through process.binding; needs --expose-internals
+			aw = require('internal/test/binding').internalBinding('async_wrap');
+		}
 		var getAsyncIdStackSize;
 
 		if (aw.asyncIdStackSize instanceof Function) {

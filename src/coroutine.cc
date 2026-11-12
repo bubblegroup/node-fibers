@@ -59,6 +59,8 @@ static char* exe_tls_base() {
 	return static_cast<char*>(__tls_get_addr(&index));
 }
 
+static char* tls_slot_address(char* base, size_t offset) { return base + offset; }
+
 // Finds `thread_local` variables of the node executable by mangled name. Returns false for the
 // ones which don't exist in this build (or if the executable is stripped).
 static void find_exe_tls_symbols(const char* const* names, size_t count, bool* found, size_t* offsets, size_t* sizes) {
@@ -91,8 +93,63 @@ static void find_exe_tls_symbols(const char* const* names, size_t count, bool* f
 	}
 	munmap(map, st.st_size);
 }
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <mach-o/loader.h>
+#include <mach-o/nlist.h>
+// A Mach-O `thread_local` symbol names a descriptor whose thunk returns the variable's address
+// for the calling thread.
+struct TlvDescriptor {
+	void* (*thunk)(TlvDescriptor*);
+	unsigned long key;
+	unsigned long offset;
+};
+
+static char* exe_tls_base() { return NULL; }
+static char* tls_slot_address(char*, size_t descriptor) {
+	TlvDescriptor* tlv = reinterpret_cast<TlvDescriptor*>(descriptor);
+	return static_cast<char*>(tlv->thunk(tlv));
+}
+
+static void find_exe_tls_symbols(const char* const* names, size_t count, bool* found, size_t* offsets, size_t* sizes) {
+	for (size_t ii = 0; ii < count; ++ii) found[ii] = false;
+	// Image 0 is the main executable
+	const struct mach_header_64* header = reinterpret_cast<const struct mach_header_64*>(_dyld_get_image_header(0));
+	if (!header || header->magic != MH_MAGIC_64) return;
+	intptr_t slide = _dyld_get_image_vmaddr_slide(0);
+	const struct segment_command_64* linkedit = NULL;
+	const struct symtab_command* symtab = NULL;
+	const struct load_command* cmd = reinterpret_cast<const struct load_command*>(header + 1);
+	for (uint32_t ii = 0; ii < header->ncmds; ++ii) {
+		if (cmd->cmd == LC_SEGMENT_64) {
+			const struct segment_command_64* segment = reinterpret_cast<const struct segment_command_64*>(cmd);
+			if (strcmp(segment->segname, SEG_LINKEDIT) == 0) linkedit = segment;
+		} else if (cmd->cmd == LC_SYMTAB) {
+			symtab = reinterpret_cast<const struct symtab_command*>(cmd);
+		}
+		cmd = reinterpret_cast<const struct load_command*>(reinterpret_cast<const char*>(cmd) + cmd->cmdsize);
+	}
+	if (!linkedit || !symtab) return;
+	const char* base = reinterpret_cast<const char*>(slide + linkedit->vmaddr - linkedit->fileoff);
+	const struct nlist_64* sym = reinterpret_cast<const struct nlist_64*>(base + symtab->symoff);
+	const char* strtab = base + symtab->stroff;
+	for (uint32_t jj = 0; jj < symtab->nsyms; ++jj) {
+		if ((sym[jj].n_type & N_STAB) || (sym[jj].n_type & N_TYPE) != N_SECT) continue;
+		const char* name = strtab + sym[jj].n_un.n_strx;
+		if (name[0] != '_') continue;
+		for (size_t kk = 0; kk < count; ++kk) {
+			if (strcmp(name + 1, names[kk]) == 0) {
+				found[kk] = true;
+				offsets[kk] = sym[jj].n_value + slide;
+				// The symbol table has no sizes: the thread id is an int, the rest are pointers
+				sizes[kk] = strstr(names[kk], "thread_idE") ? sizeof(int) : sizeof(void*);
+			}
+		}
+	}
+}
 #else
 static char* exe_tls_base() { return NULL; }
+static char* tls_slot_address(char* base, size_t offset) { return base + offset; }
 static void find_exe_tls_symbols(const char* const* names, size_t count, bool* found, size_t* offsets, size_t* sizes) {
 	for (size_t ii = 0; ii < count; ++ii) found[ii] = false;
 }
@@ -117,7 +174,7 @@ static void save_slots(uint64_t* data) {
 		} else {
 			if (!base) base = exe_tls_base();
 			data[ii] = 0;
-			memcpy(&data[ii], base + slots[ii].offset, slots[ii].size);
+			memcpy(&data[ii], tls_slot_address(base, slots[ii].offset), slots[ii].size);
 		}
 	}
 }
@@ -129,7 +186,7 @@ static void restore_slots(const uint64_t* data) {
 			pthread_setspecific(slots[ii].key, reinterpret_cast<void*>(data[ii]));
 		} else {
 			if (!base) base = exe_tls_base();
-			memcpy(base + slots[ii].offset, &data[ii], slots[ii].size);
+			memcpy(tls_slot_address(base, slots[ii].offset), &data[ii], slots[ii].size);
 		}
 	}
 }
