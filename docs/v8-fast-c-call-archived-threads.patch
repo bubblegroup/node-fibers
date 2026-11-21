@@ -1,0 +1,29 @@
+Not applied anywhere: what the V8-side fix would look like, for reference.
+fibers requires --no-turbo-fast-api-calls instead (see checkFlags in fibers.js).
+
+Since V8 12.4 (dd8d0b44d5, "[execution] Support stack iteration from fast C
+calls"), StackFrameIterator::Reset(ThreadLocalTop*) starts from the isolate-wide
+fast_c_call_caller_fp whenever it is set, whichever thread it was asked to walk.
+During a GC that starts inside a fast C call, every archived thread (every
+suspended fiber) is then walked from the running thread's frame and its own
+stack is skipped. Against Node 26.13.1 (V8 14.6.202.34). Untested: never built.
+
+--- a/deps/v8/src/execution/frames.cc
++++ b/deps/v8/src/execution/frames.cc
+@@ -291,8 +291,15 @@
+   StackFrame::State state;
+   StackFrame::Type type;
+ 
++  // The fast C call caller FP/PC live in IsolateData, so they describe the
++  // thread that is currently running in the isolate. An archived thread (see
++  // ThreadManager::Iterate) cannot be inside a fast C call: it gave up the
++  // isolate through an Unlocker, which needs an exit frame. Start its walk from
++  // its own c_entry_fp instead of the running thread's fast call.
+   const Address fast_c_call_caller_fp =
+-      isolate_->isolate_data()->fast_c_call_caller_fp();
++      top == isolate_->thread_local_top()
++          ? isolate_->isolate_data()->fast_c_call_caller_fp()
++          : kNullAddress;
+   if (fast_c_call_caller_fp != kNullAddress) {
+     const Address caller_pc = isolate_->isolate_data()->fast_c_call_caller_pc();
+     const Address caller_pc_address =
