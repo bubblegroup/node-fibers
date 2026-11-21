@@ -54,6 +54,18 @@ function checkFlags() {
 	if (asyncContextFrame) {
 		problems.push(major >= 24 ? 'add --no-async-context-frame' : 'remove --experimental-async-context-frame');
 	}
+	// A fast API call may allocate since node 24 (Buffer.byteLength flattens strings). When a
+	// garbage collection starts inside one, v8 walks every suspended fiber from the isolate-wide
+	// fast-call caller frame instead of the fiber's own stack, so what only a suspended fiber's
+	// stack refers to is moved or freed under it.
+	if (major >= 24) {
+		var noFastApiCalls = flags.some(function(flag) {
+			return /^--no-?turbo-fast-api-calls$/.test(flag.replace(/_/g, '-'));
+		});
+		if (!noFastApiCalls) {
+			problems.push('add --no-turbo-fast-api-calls');
+		}
+	}
 	if (problems.length) {
 		throw new Error('fibers cannot run with these node flags: '+ problems.join(', '));
 	}

@@ -19,7 +19,7 @@ function runTest(test, cb) {
 	if (parseInt(process.versions.node, 10) >= 24) {
 		// Without these fibers refuses to load. --no-warnings hides the notice that
 		// --expose-internals prints, which would otherwise read as a failure.
-		args.push('--no-async-context-frame', '--expose-internals', '--no-warnings');
+		args.push('--no-async-context-frame', '--no-turbo-fast-api-calls', '--expose-internals', '--no-warnings');
 	}
 	args.push(path.join('test', test));
 	var proc = spawn(process.execPath, args, { env: env });
