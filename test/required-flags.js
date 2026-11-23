@@ -23,10 +23,13 @@ function refuses(flags, hint) {
 if (major >= 24) {
 	refuses([], 'add --expose-internals');
 	refuses(['--expose-internals'], 'add --no-async-context-frame');
-	refuses(['--no-async-context-frame', '--expose-internals', '--conservative-stack-scanning'], 'remove --conservative-stack-scanning');
-	if (!load(['--no-async-context-frame', '--expose-internals']).ok) {
-		throw new Error('expected fibers to load with its required flags');
-	}
+	refuses(['--no-async-context-frame', '--expose-internals'], 'add --no-turbo-fast-api-calls');
+	refuses(['--no-async-context-frame', '--no-turbo-fast-api-calls', '--expose-internals', '--conservative-stack-scanning'], 'remove --conservative-stack-scanning');
+	[['--no-turbo-fast-api-calls'], ['--no_turbo_fast_api_calls'], ['--noturbo-fast-api-calls']].forEach(function(spelling) {
+		if (!load(['--no-async-context-frame', '--expose-internals'].concat(spelling)).ok) {
+			throw new Error('expected fibers to load with '+ spelling[0]);
+		}
+	});
 } else {
 	if (!load([]).ok) {
 		throw new Error('expected fibers to load with no flags');
